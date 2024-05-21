@@ -31,6 +31,22 @@ class RemotePlexoTest < Test::Unit::TestCase
       description: 'Test desc',
       reason: 'requested by client'
     }
+
+    @network_token_credit_card = ActiveMerchant::Billing::NetworkTokenizationCreditCard.new({
+        first_name: 'Santiago', last_name: 'Navatta',
+        brand: 'Visa',
+        payment_cryptogram: 'UnVBR0RlYm42S2UzYWJKeWJBdWQ=',
+        number: '5555555555554444',
+        source: :network_token,
+        month: '12',
+        year: 2020
+      })
+  end
+
+  def test_successful_network_tokenization_request
+    response = @gateway.purchase(@amount, @network_token_credit_card, @options.merge({ invoice_number: '12345abcde' }))
+    assert_success response
+    assert_equal "You have been mocked.", response.message
   end
 
   def test_successful_purchase
