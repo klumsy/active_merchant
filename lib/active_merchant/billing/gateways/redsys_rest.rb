@@ -1,5 +1,4 @@
 # coding: utf-8
-
 module ActiveMerchant #:nodoc:
   module Billing #:nodoc:
     # = Redsys Merchant Gateway
@@ -72,6 +71,15 @@ module ActiveMerchant #:nodoc:
         'TWD' => '901',
         'USD' => '840',
         'UYU' => '858'
+      }
+
+      THREEDS_EXEMPTIONS = {
+        corporate_card: 'COR',
+        delegated_authentication: 'ATD',
+        low_risk: 'TRA',
+        low_value: 'LWV',
+        stored_credential: 'MIT',
+        trusted_merchant: 'NDF'
       }
 
       # The set of supported transactions for this gateway.
@@ -186,6 +194,8 @@ module ActiveMerchant #:nodoc:
         post = {}
         add_action(post, :purchase, options)
         add_amount(post, money, options)
+        add_stored_credentials(post, options)
+        add_threeds_exemption_data(post, options)
         add_order(post, options[:order_id])
         add_payment(post, payment)
         add_description(post, options)
@@ -201,6 +211,8 @@ module ActiveMerchant #:nodoc:
         post = {}
         add_action(post, :authorize, options)
         add_amount(post, money, options)
+        add_stored_credentials(post, options)
+        add_threeds_exemption_data(post, options)
         add_order(post, options[:order_id])
         add_payment(post, payment)
         add_description(post, options)
@@ -376,6 +388,31 @@ module ActiveMerchant #:nodoc:
       def add_authentication(post, options)
         post[:DS_MERCHANT_TERMINAL] = options[:terminal] || @options[:terminal]
         post[:DS_MERCHANT_MERCHANTCODE] = @options[:login]
+      end
+
+      def add_stored_credentials(post, options)
+        return unless stored_credential = options[:stored_credential]
+
+        post[:DS_MERCHANT_COF_INI] = stored_credential[:initial_transaction] ? 'S' : 'N'
+
+        post[:DS_MERCHANT_COF_TYPE] = {
+          'recurring' => 'R',
+          'installment' => 'I'
+        }[stored_credential[:reason_type]] || 'C'
+
+        post[:DS_MERCHANT_IDENTIFIER] = 'REQUIRED' if stored_credential[:initiator] == 'cardholder'
+        post[:DS_MERCHANT_COF_TXNID] = stored_credential[:network_transaction_id] if stored_credential[:network_transaction_id].present?
+      end
+
+      def add_threeds_exemption_data(post, options)
+        return unless options[:three_ds_exemption_type]
+
+        if options[:three_ds_exemption_type] == 'moto'
+          post[:DS_MERCHANT_DIRECTPAYMENT] = 'MOTO'
+        else
+          exemption = options[:three_ds_exemption_type].to_sym
+          post[:DS_MERCHANT_EXCEP_SCA] = THREEDS_EXEMPTIONS[exemption]
+        end
       end
 
       def parse(body)
