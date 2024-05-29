@@ -106,7 +106,8 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
       invoice_number: '123',
       first_recurring_payment: true,
       mobile_remote_payment_type: 'A1',
-      vat_tax_rate: '1'
+      vat_tax_rate: '1',
+      auth_reason: '4'
     }
 
     @capture_options = {
@@ -190,7 +191,24 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
     }
     @options[:commerce_indicator] = 'internet'
 
-    assert response = @gateway.authorize(@amount, @credit_card, @options)
+    assert response = @gateway.authorize(@amount, @master_credit_card, @options)
+    assert_successful_response(response)
+    assert !response.authorization.blank?
+  ensure
+    ActiveMerchant::Billing::CyberSourceGateway.application_id = nil
+  end
+
+  def test_successful_authorize_with_options_to_conduct_recurring_internet_commerce_indicator
+    ActiveMerchant::Billing::CyberSourceGateway.application_id = 'A1000000'
+    @options[:stored_credential] = {
+      initiator: 'cardholder',
+      reason_type: '',
+      initial_transaction: true,
+      network_transaction_id: ''
+    }
+    @options.delete(:commerce_indicator)
+
+    assert response = @gateway.authorize(@amount, @master_credit_card, @options)
     assert_successful_response(response)
     assert !response.authorization.blank?
   ensure
@@ -1245,6 +1263,18 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
       network_transaction_id: ''
     }
     assert response = @gateway.authorize(@amount, @credit_card, @options)
+    assert_successful_response(response)
+  end
+
+  def test_successful_recurring_cof_authorize_for_mastercard_with_auth_reason
+    @options[:stored_credential] = {
+      initiator: 'merchant',
+      reason_type: 'recurring',
+      initial_transaction: false,
+      network_transaction_id: ''
+    }
+    @options[:auth_reason] = '7'
+    assert response = @gateway.authorize(@amount, @master_credit_card, @options)
     assert_successful_response(response)
   end
 

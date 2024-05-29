@@ -354,11 +354,13 @@ module ActiveMerchant #:nodoc:
       end
 
       def build_auth_request(money, creditcard_or_reference, options)
+        card_brand = card_brand(creditcard_or_reference).to_sym unless creditcard_or_reference.is_a?(String)
+
         xml = Builder::XmlMarkup.new indent: 2
         add_customer_id(xml, options)
         add_payment_method_or_subscription(xml, money, creditcard_or_reference, options)
-        add_threeds_2_ucaf_data(xml, creditcard_or_reference, options)
-        add_mastercard_network_tokenization_ucaf_data(xml, creditcard_or_reference, options)
+        add_threeds_2_ucaf_data(xml, creditcard_or_reference, card_brand, options)
+        add_mastercard_network_tokenization_ucaf_data(xml, creditcard_or_reference, card_brand, options)
         add_decision_manager_fields(xml, options)
         add_other_tax(xml, options)
         add_mdd_fields(xml, options)
@@ -374,7 +376,7 @@ module ActiveMerchant #:nodoc:
         add_stored_credential_subsequent_auth(xml, options)
         add_issuer_additional_data(xml, options)
         add_partner_solution_id(xml)
-        add_stored_credential_options(xml, options)
+        add_stored_credential_options(xml, card_brand, options)
         add_merchant_description(xml, options)
         xml.target!
       end
@@ -419,15 +421,17 @@ module ActiveMerchant #:nodoc:
       end
 
       def build_purchase_request(money, payment_method_or_reference, options)
+        card_brand = card_brand(payment_method_or_reference).to_sym unless payment_method_or_reference.is_a?(String)
+
         xml = Builder::XmlMarkup.new indent: 2
         add_customer_id(xml, options)
         add_payment_method_or_subscription(xml, money, payment_method_or_reference, options)
-        add_threeds_2_ucaf_data(xml, payment_method_or_reference, options)
-        add_mastercard_network_tokenization_ucaf_data(xml, payment_method_or_reference, options)
+        add_threeds_2_ucaf_data(xml, payment_method_or_reference, card_brand, options)
+        add_mastercard_network_tokenization_ucaf_data(xml, payment_method_or_reference, card_brand, options)
         add_decision_manager_fields(xml, options)
         add_other_tax(xml, options)
         add_mdd_fields(xml, options)
-        if (!payment_method_or_reference.is_a?(String) && card_brand(payment_method_or_reference) == 'check') || reference_is_a_check?(payment_method_or_reference)
+        if card_brand == :check || reference_is_a_check?(payment_method_or_reference)
           add_check_service(xml)
           add_airline_data(xml, options)
           add_sales_slip_number(xml, options)
@@ -447,7 +451,7 @@ module ActiveMerchant #:nodoc:
           add_stored_credential_subsequent_auth(xml, options)
           add_issuer_additional_data(xml, options)
           add_partner_solution_id(xml)
-          add_stored_credential_options(xml, options)
+          add_stored_credential_options(xml, card_brand, options)
           options[:payment_method] = :credit_card
         end
 
@@ -850,8 +854,8 @@ module ActiveMerchant #:nodoc:
         options[:commerce_indicator].blank? && ECI_BRAND_MAPPING[cc_brand].present?
       end
 
-      def add_threeds_2_ucaf_data(xml, payment_method, options)
-        return unless options[:three_d_secure] && card_brand(payment_method).to_sym == :master
+      def add_threeds_2_ucaf_data(xml, payment_method, card_brand, options)
+        return unless options[:three_d_secure] && card_brand == :master
 
         xml.tag! 'ucaf' do
           xml.tag!('authenticationData', options[:three_d_secure][:cavv])
@@ -862,11 +866,21 @@ module ActiveMerchant #:nodoc:
       def stored_credential_commerce_indicator(options)
         return unless options[:stored_credential]
 
-        return if options[:stored_credential][:initial_transaction]
+        if options[:stored_credential][:initial_transaction]
+          if options.dig(:stored_credential, :initiator) == 'cardholder'
+            return 'recurring_internet'
+          else
+            return nil
+          end
+        end
 
         case options[:stored_credential][:reason_type]
-        when 'installment' then 'install'
-        when 'recurring' then 'recurring'
+        when 'installment'
+          'install'
+        when 'recurring'
+          'recurring'
+        else
+          'internet'
         end
       end
 
@@ -918,8 +932,8 @@ module ActiveMerchant #:nodoc:
         end
       end
 
-      def add_mastercard_network_tokenization_ucaf_data(xml, payment_method, options)
-        return unless network_tokenization?(payment_method) && card_brand(payment_method).to_sym == :master
+      def add_mastercard_network_tokenization_ucaf_data(xml, payment_method, card_brand, options)
+        return unless network_tokenization?(payment_method) && card_brand == :master
         return if payment_method.source == :network_token
 
         commerce_indicator = 'internet' if subsequent_nt_apple_pay_auth(payment_method.source, options)
@@ -1101,10 +1115,12 @@ module ActiveMerchant #:nodoc:
         xml.subsequentAuth override_subsequent_auth.nil? ? stored_credential_subsequent_auth : override_subsequent_auth
       end
 
-      def add_stored_credential_options(xml, options = {})
+      def add_stored_credential_options(xml, card_brand = nil, options = {})
         return unless options[:stored_credential] || options[:stored_credential_overrides]
 
-        stored_credential_subsequent_auth_first = 'true' if options.dig(:stored_credential, :initial_transaction)
+        requires!(options, :auth_reason) if card_brand == :master
+
+        stored_credential_subsequent_auth_first = 'true' if cardholder_or_initiated_transaction?(options)
         stored_credential_transaction_id = options.dig(:stored_credential, :network_transaction_id) if options.dig(:stored_credential, :initiator) == 'merchant'
         stored_credential_subsequent_auth_stored_cred = 'true' if subsequent_cardholder_initiated_transaction?(options) || unscheduled_merchant_initiated_transaction?(options) || threeds_stored_credential_exemption?(options)
 
@@ -1113,8 +1129,13 @@ module ActiveMerchant #:nodoc:
         override_subsequent_auth_stored_cred = options.dig(:stored_credential_overrides, :subsequent_auth_stored_credential)
 
         xml.subsequentAuthFirst override_subsequent_auth_first.nil? ? stored_credential_subsequent_auth_first : override_subsequent_auth_first
+        xml.subsequentAuthReason options[:auth_reason] if options[:auth_reason] && options.dig(:stored_credential, :reason_type) == 'recurring'
         xml.subsequentAuthTransactionID override_subsequent_auth_transaction_id.nil? ? stored_credential_transaction_id : override_subsequent_auth_transaction_id
         xml.subsequentAuthStoredCredential override_subsequent_auth_stored_cred.nil? ? stored_credential_subsequent_auth_stored_cred : override_subsequent_auth_stored_cred
+      end
+
+      def cardholder_or_initiated_transaction?(options)
+        options.dig(:stored_credential, :initiator) == 'cardholder' || options.dig(:stored_credential, :initial_transaction)
       end
 
       def subsequent_cardholder_initiated_transaction?(options)

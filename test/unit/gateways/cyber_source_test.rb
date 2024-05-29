@@ -547,6 +547,7 @@ class CyberSourceTest < Test::Unit::TestCase
                                                    eci: '05',
                                                    payment_cryptogram: '111111111100cryptogram',
                                                    source: :apple_pay)
+    @options[:auth_reason] = '7'
     options = @options.merge({
       stored_credential: {
         initiator: 'merchant',
@@ -1112,7 +1113,7 @@ class CyberSourceTest < Test::Unit::TestCase
     response = stub_comms do
       @gateway.authorize(@amount, @credit_card, @options)
     end.check_request do |_endpoint, data, _headers|
-      assert_not_match(/\<subsequentAuthFirst\>/, data)
+      assert_match(/\<subsequentAuthFirst\>/, data)
       assert_match(/\<subsequentAuthStoredCredential\>/, data)
       assert_not_match(/\<subsequentAuth\>/, data)
       assert_not_match(/\<subsequentAuthTransactionID\>/, data)
@@ -1293,7 +1294,7 @@ class CyberSourceTest < Test::Unit::TestCase
       assert_match(/\<networkTokenCryptogram\>111111111100cryptogram/, data)
       assert_match(/\<paymentSolution\>015/, data)
       assert_match(/\<transactionType\>3/, data)
-      assert_not_match(/\<subsequentAuthFirst\>true/, data)
+      assert_match(/\<subsequentAuthFirst\>true/, data)
       assert_match(/\<subsequentAuthStoredCredential\>true/, data)
       assert_not_match(/\<subsequentAuth\>true/, data)
       assert_not_match(/\<subsequentAuthTransactionID\>016150703802094/, data)
@@ -1361,7 +1362,7 @@ class CyberSourceTest < Test::Unit::TestCase
       assert_match(/\<networkTokenCryptogram\>111111111100cryptogram/, data)
       assert_match(/\<paymentSolution\>015/, data)
       assert_match(/\<transactionType\>3/, data)
-      assert_not_match(/\<subsequentAuthFirst\>/, data)
+      assert_match(/\<subsequentAuthFirst\>/, data)
       assert_match(/\<subsequentAuthStoredCredential\>true/, data)
       assert_not_match(/\<subsequentAuth\>true/, data)
       assert_not_match(/\<subsequentAuthTransactionID\>016150703802094/, data)
@@ -1429,7 +1430,7 @@ class CyberSourceTest < Test::Unit::TestCase
       assert_match(/\<networkTokenCryptogram\>111111111100cryptogram/, data)
       assert_match(/\<paymentSolution\>015/, data)
       assert_match(/\<transactionType\>3/, data)
-      assert_not_match(/\<subsequentAuthFirst\>/, data)
+      assert_match(/\<subsequentAuthFirst\>/, data)
       assert_match(/\<subsequentAuthStoredCredential\>true/, data)
       assert_not_match(/\<subsequentAuth\>true/, data)
       assert_not_match(/\<subsequentAuthTransactionID\>016150703802094/, data)
