@@ -92,7 +92,8 @@ module ActiveMerchant #:nodoc:
           gsub(%r(("Number\\?"\s*:\s*\\?")[^"]*)i, '\1[FILTERED]').
           gsub(%r(("Cvc\\?"\s*:\s*\\?")[^"]*)i, '\1[FILTERED]').
           gsub(%r(("InvoiceNumber\\?"\s*:\s*\\?")[^"]*)i, '\1[FILTERED]').
-          gsub(%r(("MerchantId\\?"\s*:\s*\\?")[^"]*)i, '\1[FILTERED]')
+          gsub(%r(("MerchantId\\?"\s*:\s*\\?")[^"]*)i, '\1[FILTERED]').
+          gsub(%r(("Cryptogram\\?"\s*:\s*\\?")[^"]*)i, '\1[FILTERED]')
       end
 
       private

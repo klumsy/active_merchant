@@ -11,7 +11,7 @@ class PlexoTest < Test::Unit::TestCase
     @declined_card = credit_card('5555555555554445')
     @network_token_credit_card = ActiveMerchant::Billing::NetworkTokenizationCreditCard.new({
       first_name: 'Santiago', last_name: 'Navatta',
-      brand: 'Visa',
+      brand: 'Mastercard',
       payment_cryptogram: 'UnVBR0RlYm42S2UzYWJKeWJBdWQ=',
       number: '5555555555554444',
       source: :network_token,
@@ -338,7 +338,7 @@ class PlexoTest < Test::Unit::TestCase
     assert_equal @gateway.scrub(pre_scrubbed), post_scrubbed
   end
 
-  def test_network_tokenization_success
+  def test_purchase_with_network_token
     purchase = stub_comms do
       @gateway.purchase(@amount, @network_token_credit_card, @options)
     end.check_request do |_endpoint, data, _headers|
@@ -346,6 +346,9 @@ class PlexoTest < Test::Unit::TestCase
       assert_equal request['Amount']['Currency'], 'UYU'
       assert_equal request['Amount']['Details']['TipAmount'], '5'
       assert_equal request['Flow'], 'direct'
+      assert_equal @network_token_credit_card.number, request['paymentMethod']['Card']['Number']
+      assert_equal @network_token_credit_card.payment_cryptogram, request['paymentMethod']['Card']['Cryptogram']
+      assert_equal @network_token_credit_card.first_name, request['paymentMethod']['Card']['Cardholder']['FirstName']
     end.respond_with(successful_network_token_response)
 
     assert_success purchase
